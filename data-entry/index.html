@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	<title>Health Resources</title>
+
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<link rel="stylesheet" href="lib/jquery.mobile-1.0b3.min.css" />
+	<script type="text/javascript" src="lib/jquery-1.6.3.min.js"></script>
+	<script type="text/javascript" src="lib/jquery.mobile-1.0b3.min.js"></script>
+	<script type="text/javascript" src="scripts/loadjson.js"></script>
+	<script type="text/javascript" src="lib/jquery-ui.min.js"></script>
+	<link rel="stylesheet" href="lib/ui.theme.css" type="text/css" media="all" />	
+	
+
+	<style>
+	.child {
+	   margin-right:5px;
+	   float:left;
+	   width: 300px;
+	   margin-left:2px;
+	}
+	#editItemButton{
+		position: absolute;
+		right: 30px;
+		top: 5px;
+	}
+	#deleteItemButton{
+		position: absolute;
+		right: 65px;
+		top: 5px;
+	}	
+	#moveUpItemButton{
+		position: absolute;
+		right: 125px;
+		top: 5px;
+	}
+	#moveDownItemButton{
+		position: absolute;
+		right: 95px;
+		top: 5px;
+	}
+	#editTitleButton{
+		position: absolute;
+		right: 30px;
+		top: 5px;
+	}	
+	</style>
+	
+	<script>
+
+	function transitionTo(pk, idPanel) {
+		var res = getEntryFromFile(pk);
+
+		if(res['type'] == 'MENU') {
+			showMenu(idPanel, pk);
+			makeMenu(pk, res['items'], idPanel);
+		}
+
+		if(res['type'] == 'ENDPAGE') {
+			showData(res['data'], idPanel, pk);
+		}
+
+		setTitle(res['title'], idPanel);
+	}
+	
+	function setTitle(title, idPanel) {	
+		$("[id='header-line']:eq("+idPanel+")").html(title);
+		document.title = title;
+	}
+
+	function makeItemStatic(primarykey, elemId, newData, menuPK, idPanel) {
+		var menuItem = $("#"+elemId);		
+		var editButton = menuItem.find('#editItemButton');
+		var deleteButton = menuItem.find('#deleteItemButton');
+		var upButton = menuItem.find('#moveUpItemButton');
+		var downButton = menuItem.find('#moveDownItemButton');
+		
+		upButton.show();
+		downButton.show();
+
+		menuItem = editButton.parent();
+		menuItem.html(newData);
+		menuItem.append(downButton);
+		menuItem.append(upButton);
+		menuItem.append(editButton);
+		menuItem.append(deleteButton);
+		
+		editButton.unbind('click').click(function(e){
+			makeItemEditable(e, primarykey, elemId, menuPK, idPanel);
+		});
+		
+		deleteButton.unbind('click').click(function(e){
+			deleteItem(e, primarykey, elemId);
+		});
+		
+		upButton.unbind('click').click(function(e){
+			moveUpItem(e, primarykey, menuPK, idPanel);
+		});
+		
+		downButton.unbind('click').click(function(e){
+			moveDownItem(e, primarykey, menuPK, idPanel)
+		});
+		
+		editButton.attr('src','./lib/images/pencil.png');
+
+	}
+	
+	function saveItem(primarykey, elemId, menuPK, idPanel) {
+		var newData = $("#"+elemId).find('#newItem').val();
+
+		phpEditJSONItem(primarykey, newData, 'title');
+		makeItemStatic(primarykey, elemId, newData, menuPK, idPanel);
+		return false;
+	}	
+	
+	function makeItemEditable(e, primarykey, elemId, menuPK, idPanel) {
+		e.preventDefault();
+		e.stopPropagation(); //make sure the item doesn't get clicked
+		
+ 		var formData = "<form data-ajax='false' onsubmit='return saveItem("+primarykey+",\""+elemId+"\");'><input id='newItem' type='text' value='"+window.jsondata[primarykey]['title']+"' /></form>";
+
+		var editButton = $("#"+elemId).find('#editItemButton');
+		var deleteButton = $("#"+elemId).find('#deleteItemButton');
+		var upButton = $("#"+elemId).find('#moveUpItemButton');
+		var downButton = $("#"+elemId).find('#moveDownItemButton');
+		
+		var menuItem = editButton.parent();
+		
+		menuItem.html(formData);
+		
+		$('[id="newItem"]').click(function(e) {e.preventDefault();e.stopPropagation();});
+		$('[id="newItem"]').keypress(function(e) {if(e.keyCode==13){e.preventDefault();e.stopPropagation();saveItem(primarykey,elemId)}});
+
+		menuItem.append(downButton);
+		menuItem.append(upButton);
+		menuItem.append(editButton);
+		menuItem.append(deleteButton);
+		
+		downButton.hide();
+		upButton.hide();
+		editButton.unbind('click').click(function(e){e.preventDefault();e.stopPropagation();saveItem(primarykey,elemId, menuPK, idPanel);});
+		deleteButton.unbind('click').click(function(e) {deleteItem(e, primarykey, elemId)});
+		
+		upButton.unbind('click').click(function(e){
+			moveUpItem(e, primarykey, menuPK, idPanel);
+		});
+		
+		downButton.unbind('click').click(function(e){
+			moveDownItem(e, primarykey, menuPK, idPanel)
+		});
+		
+		editButton.attr('src','./lib/images/save-icon.JPG');
+	}
+	
+	function deleteItem(e, primarykey, elemId) {
+		e.preventDefault();
+		e.stopPropagation(); //make sure the item doesn't get clicked
+		
+		var editButton = $("#"+elemId).find('#editItemButton');		
+		var menuItem = editButton.parent();
+		
+		var doDelete = confirm("Are you sure you want to delete this item?\n("+window.jsondata[primarykey]['title']+")");
+		
+		if(doDelete) {
+			phpDeleteFunction(primarykey);
+			$("#"+elemId).remove();
+		}
+	}
+	
+	function phpDeleteFunction(pk){
+		var url = 'alterJSON/deleteItem.php';
+		var data = { primarykey:pk };
+		var request = $.ajax({
+		  	async: false,
+			type: 'POST',
+		  	url: url,
+		  	data: data,
+		  	success: function(){
+				loadFile('../data.json');
+				console.log("Successfully deleted item with primary key: "+pk);
+			},
+		  	error: function(){
+				console.log("Error when deleting item");
+				console.log("Primary key to delete was: "+pk);
+			}
+		});
+	}
+	
+	function phpChangeOrderFunction(pk, menuPK, direction, idPanel){
+		var url = 'alterJSON/changeItemOrder.php';
+
+		var data = { primarykey:pk, menuPK:menuPK, direction:direction};
+		var request = $.ajax({
+		  	async: false,
+			type: 'POST',
+		  	url: url,
+		  	data: data,
+		  	success: function(){
+				var itemList = $("[id='main-menu']:eq("+idPanel+")");
+				var elementToMove = itemList.find("#item_"+pk);
+				var indexOfElement = itemList.find('li:[id!="base-item"]').index(elementToMove);
+				if(direction == "up"){
+					if(indexOfElement > 0){
+						var elementAbove = itemList.find("li:[id!='base-item']:eq("+(indexOfElement-1)+")");
+						elementAbove.before(elementToMove);
+					}
+					else{
+						console.log("Denied by boundary");
+					}
+				}
+				else{
+					var lastItem = itemList.find('li:last');
+					var lastIndex = itemList.find('li:[id!="base-item"]').index(lastItem);
+					if(indexOfElement < lastIndex){
+						var elementBelow = itemList.find("li:[id!='base-item']:eq("+(indexOfElement+1)+")");
+						elementBelow.after(elementToMove);
+					}
+					else{
+						console.log("Denied by boundary");
+					}
+				}
+				console.log("Successfully changed the order of item "+pk+" in menu "+menuPK+".");
+			},
+		  	error: function(){
+				console.log("Error when changing the order of item.");
+				console.log("The menu's primary key is: "+menuPK);
+				console.log("The primary key of the element is: "+pk);
+				console.log("The direction to move the element is: "+direction);
+				console.log("The idPanel is: "+idPanel);
+			}
+		});
+	}
+	
+	function moveUpItem(e, primarykey, menuPK, idPanel){
+		e.preventDefault();
+		e.stopPropagation();
+		phpChangeOrderFunction(primarykey, menuPK, "up", idPanel);
+	}
+	
+	function moveDownItem(e, primarykey, menuPK, idPanel){
+		e.preventDefault();
+		e.stopPropagation();
+		phpChangeOrderFunction(primarykey, menuPK, "down", idPanel);
+	}
+	
+	function createMenuItem(elem, text, next, idPanel, primarykey, menuPK) {
+		var cloned = $(elem).clone();
+		var ul = $("[id='main-menu']:eq("+idPanel+")");
+		var editButton = '';
+		var deleteButton = '';
+		var upButton = '';
+		var downButton = '';
+		
+		if(typeof primarykey != 'undefined') {
+			editButton = "<img id='editItemButton' src='./lib/images/pencil.png'/>";
+			deleteButton = "<img id='deleteItemButton' src='./lib/images/trash.png'/>";
+			upButton = "<img id='moveUpItemButton' src='./lib/images/up.png'/>";
+			downButton = "<img id='moveDownItemButton' src='./lib/images/down.png'/>";
+		}
+		
+		var innerItem = cloned.find(':only-child:last');
+		
+		
+		innerItem.html(text+editButton+deleteButton+downButton+upButton);
+		innerItem.children().filter('#editItemButton').click(function(e) {makeItemEditable(e, primarykey, "item_"+primarykey, menuPK, idPanel)});
+		innerItem.children().filter('#deleteItemButton').click(function(e) {deleteItem(e, primarykey, "item_"+primarykey)});
+		innerItem.children().filter('#moveDownItemButton').click(function(e) {moveDownItem(e, primarykey, menuPK, idPanel)});
+		innerItem.children().filter('#moveUpItemButton').click(function(e) {moveUpItem(e, primarykey, menuPK, idPanel)});
+
+		innerItem.attr('next',next);
+		cloned.attr('id', 'item_'+primarykey);
+		cloned.click(function() {
+			ul.find('li').css('background','white');	
+			$(cloned).css('background','yellow');	
+			transitionTo(next, idPanel+1);
+			
+		});
+
+		cloned.show();
+
+		ul.append(cloned);
+	}
+
+	function emptyMenu(idPanel) {
+		$("[id='main-menu']:eq("+idPanel+")").empty();
+		$("[id='main-data']:eq("+idPanel+")").empty();
+	}
+
+	function emptyData(idPanel) {
+		var classname = $(".child");
+		for(var i = idPanel+1;i<classname.length;i++){
+			$("[id='main-data']:eq("+i+")").empty();
+			$("[id='firstColumn']:eq("+i+")").hide();			
+		}
+	}
+
+	function hideMenu(idPanel) {
+		emptyMenu(idPanel);
+		$("[id='firstColumn']:eq("+idPanel+")").hide();
+		$("[id='main-menu-wrapper']:eq("+idPanel+")").hide();
+		
+	}
+	
+	function phpAddNewItem(idPanel, pk, newTitle, radio){
+		var url = 'alterJSON/addNewItem.php';
+		var data = { primarykey:pk, radio_next_item:radio, title:newTitle};
+		var request = $.ajax({
+		  	async: false,
+			type: 'POST',
+		  	url: url,
+		  	data: data,
+		  	success: function(){
+				loadFile('../data.json');
+				transitionTo(pk, idPanel);
+				console.log("Successfully added new item connecting to a new "+radio+" with Title: " + newTitle +".");
+			},
+		  	error: function(){
+				console.log("Error in adding a new item with blank menu/endpage.");
+				console.log("Title is: "+newTitle);
+				console.log("Next item is: "+radio);
+				console.log("idPanel is: "+idPanel);
+				console.log("Primary key: "+pk);
+			},
+		});
+	}
+	
+	function phpAddItemLinkedToExisting(idPanel, pk, newTitle, nextPk){
+		var url = 'alterJSON/addItemLinkedToExisting.php';
+		var data = { primarykey:pk, nextPK:nextPk, title:newTitle};
+		var request = $.ajax({
+		  	async: false,
+			type: 'POST',
+		  	url: url,
+		  	data: data,
+		  	success: function(){
+				loadFile('../data.json');
+				transitionTo(pk, idPanel);
+				console.log("Successfully added a new item connecting to an existing menu/endpage with primary key "+pk+" and the title of this new item is "+newTitle+".");
+			},
+		  	error: function(){
+				console.log("Error in adding a new item connecting to an existing menu/endpage.");
+				console.log("Title is: "+newTitle);
+				console.log("Next primary key is: "+nextPk);
+				console.log("idPanel is: "+idPanel);
+				console.log("Current primary key is: "+pk);
+			},
+		});
+	}
+	
+	function saveMenu(idPanel, primarykey, title, radio){
+		
+		//if pk is undefined, that means it is the root menu, and should be zero
+		if(typeof(primarykey) === 'undefined'){
+			primarykey = 1;
+		}
+		
+		//meaning user has not selected add blank menu/endpage
+		if(typeof(radio) === 'undefined'){
+			var selectedItem;
+			var txt = "";
+			
+			var em_is_undef = typeof(document.add_new_item.existing_menu.length) == 'undefined';
+			var ee_is_undef = typeof(document.add_new_item.existing_endpage.length) == 'undefined';
+			
+			if(em_is_undef && ee_is_undef) {
+				return;
+			}
+			
+			if(em_is_undef) {
+				selectedItem = $('[name="existing_endpage"] option:selected').val();
+			}
+			if(ee_is_undef) {
+				selectedItem = $('[name="existing_menu"] option:selected').val();
+			}
+			
+			phpAddItemLinkedToExisting(idPanel, primarykey, title, selectedItem);	//only used to add new item to connect to existing menu/endpage
+		}
+		else{
+			phpAddNewItem(idPanel, primarykey, title, radio);	//only used to add new item to connect to blank menu/endpage
+		} 
+	}
+	
+	function showExisting(displayType, type, primarykey) {
+		$('input[name=radio_next_item]').prop('checked', false);
+		$('#existingItem').empty();
+		var menuItems = getItems(type, primarykey);
+		
+		if(menuItems.length > 0) {
+			var content = "Existing "+displayType+"<br/><select name='existing_menu'>";
+			for(var i in menuItems){
+				content = content + "<option value="+menuItems[i].pk+">"+menuItems[i].title+"</option>";
+			}
+			content = content + "</select>";
+		}
+		else {
+			var content = "Cannot Add Existing "+displayType;
+		}
+		$('#existingItem').append(content);
+		$('#existingItem').show();
+	}
+	
+	function showAddNewMenuEndpage(){
+		$('input[name=radio_option]').prop('checked', false);
+		//$('#add_new_button').prop('checked', true);
+		$('#existingItem').empty();
+		// var content = "Add New<br/><input id='menu' type='radio' name='radio_next_item' value='Menu'  checked/>Menu<input id='menu' type='radio' name='radio_next_item' value='Endpage'  />Endpage";
+		//$('#existingItem').append(content);
+		//$('#existingItem').show();
+	}
+	
+	function dialogBox(idPanel, primarykey){
+		document.add_new_item.reset();	//clear dialog box from previous content
+		showAddNewMenuEndpage();	//automatically have "Add Blank Menu/Endpage" when opening dialog box
+		$('[id="add_new_button"]').click(function(e) {e.stopPropagation();showAddNewMenuEndpage();});
+		$('[id="existing_menu"]').click(function(e) {e.stopPropagation();showExisting('Menu','MENU',primarykey);});
+		$('[id="existing_endpage"]').click(function(e) {e.stopPropagation();showExisting('Endpage', 'ENDPAGE',primarykey);});
+		
+		$('#survey').dialog({
+		autoOpen:true,
+		maxWidth:250,
+		resizable:false,
+		draggable:false,
+		title: "Add New Item",
+		buttons: {
+             "Submit": function() {
+							var title = $('#title').val();
+							var radio = $('input[name=radio_next_item]:checked').val();
+							saveMenu(idPanel, primarykey, title, radio);
+							$(this).dialog("close");
+						 },
+				 "Cancel": function() {
+					  $(this).dialog("close");
+             }
+         },
+		open: function(event, ui) { $(".ui-dialog-titlebar-close").hide();	//hide the close button on top right corner 
+		}
+		});
+
+		$('[role="dialog"]').css('background','grey');
+		$('[role="dialog"]').css('padding','5px');
+		$('[role="dialog"]').css('min-height', '50px');
+	}
+
+	function showMenu(idPanel, primarykey) {
+		$("[id='firstColumn']:eq("+idPanel+")").show();
+		emptyMenu(idPanel);
+		emptyData(idPanel);		
+		$("[id='main-data']:eq("+idPanel+")").append("<button onclick='dialogBox("+idPanel+"," +primarykey + ")' id='popupButton'>Add New Item to this Menu</button>")
+		$("[id='main-menu-wrapper']:eq("+idPanel+")").show();
+		updateTitleButton(idPanel, primarykey);
+	}
+
+	function getTitleButton(idPanel, primarykey) {
+		var titleparent=$("[id='header-line']:eq("+idPanel+")").parent();
+		var titlebtn = titleparent.children().filter("[id='editTitleButton']");
+
+		return titlebtn;
+	}
+
+	function updateTitleButton(idPanel, primarykey) {
+		var titlebtn = getTitleButton(idPanel, primarykey);
+
+		titlebtn.unbind('click').click(function() {makeTitleEditable(idPanel,primarykey)});
+	}
+
+	function makeTitleEditable(idPanel, primarykey) {
+		var title = $("[id='header-line']:eq("+idPanel+")").html();
+
+		var formData = "<form data-ajax='false' onsubmit='return saveTitle("+idPanel+","+primarykey+");'><input id='newTitle' type='text' value='"+title+"' /></form>";
+
+		$("[id='header-line']:eq("+idPanel+")").html(formData);
+		
+		var titlebtn = getTitleButton(idPanel, primarykey)
+		titlebtn.unbind('click').click(function() {saveTitle(idPanel,primarykey)});
+		titlebtn.attr('src','./lib/images/save-icon.JPG');
+
+	}
+
+	function makeTitleStatic(idPanel, primarykey, title) {
+		var title;
+		
+		if(typeof title == 'undefined') {
+			title = window.jsondata[primarykey]['title'];
+		}
+		else {
+			title = $("[id='newTitle']:eq(0)").val();
+		}
+		
+		$("[id='header-line']:eq("+idPanel+")").html(title);
+		
+		var titlebtn = getTitleButton(idPanel, primarykey);
+		titlebtn.unbind('click').click(function() {makeTitleEditable(idPanel,primarykey)});
+		titlebtn.attr('src','./lib/images/pencil.png');
+	}
+	
+	function phpEditJSONItem(pk, editData, type){
+		var url = 'alterJSON/editJSONItem.php';
+		var data = { primarykey:pk, editData:editData, type: type };
+		var request = $.ajax({
+		  	async: false,
+			type: 'POST',
+		  	url: url,
+		  	data: data,
+		  	success: function(){
+				if(window.jsondata[pk]) {
+					window.jsondata[pk][type] = editData;
+				}	
+			},
+		  	error: function(){
+				alert("error");
+			}
+		});
+	}
+
+	function saveTitle(idPanel, primarykey) {
+		var newTitle = $("[id='newTitle']:eq(0)").val();
+		phpEditJSONItem(primarykey, newTitle, 'title');
+		makeTitleStatic(idPanel, primarykey, newTitle);
+		return false;
+	}
+
+	function saveData(idPanel, data, primarykey){
+		var text = $('#testingTextArea').val();
+		data = unescape(text);
+		phpEditJSONItem(primarykey, data, 'data');
+		emptyData(idPanel);
+		showData(data, idPanel, primarykey);
+	}
+	
+	function editData(idPanel, data, primarykey){
+		data = unescape(data);
+		$("#editButton").remove();
+		$("[id='main-data']:eq("+idPanel+")").empty();
+		var dataEntry = getEntryFromFile(primarykey);
+		$("[id='main-data']:eq("+idPanel+")").append("<button onclick='saveData("+idPanel+",\""+escape(data)+"\","+primarykey+")' id='saveButton'>Save</button>");
+		var onFocusBlur = "onfocus='if (this.value == \"Please enter information after clicking on the edit button\") {this.value=\"\"}' onblur='if(this.value == \"\") { this.value=\"Please enter information after clicking on the edit button\"}'";
+		$("[id='main-data']:eq("+idPanel+")").append("<form><textarea rows='20' cols='25' id='testingTextArea' name='testingTextArea'"+onFocusBlur+">"+dataEntry.data+"</textarea></form>");
+	}
+
+	function showData(data, idPanel, primarykey) {
+		emptyMenu(idPanel);
+		$("[id='survey']:eq("+idPanel+")").hide();
+		$("[id='firstColumn']:eq("+idPanel+")").show();
+		var editVariables = "editData("+idPanel+",\""+escape(data)+"\","+primarykey+")";
+		var editFunction = "<button onclick='"+editVariables+"' id='editButton'>Edit</button>";
+		$("[id='main-menu']:eq("+idPanel+")").append(editFunction);
+		$("[id='main-data']:eq("+idPanel+")").show();
+		$("[id='main-data']:eq("+idPanel+")").html(data);
+		addLinks(/[01]?[- .]?\(?[2-9]\d{2}\)?[- .]?\d{3}[- .]?\d{4}/g, true, 7);
+		addLinks(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,6}/gi, false, true);
+		addLinks(/(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi);
+		updateTitleButton(idPanel, primarykey);
+	}
+	
+
+	//assume elem with pk 1 is the base menu
+	function makeBaseMenu() {        
+		var baseMenuPK = 1;
+		var res = getEntryFromFile(baseMenuPK);
+		makeMenu(baseMenuPK, res['items']);
+	}
+
+	function showBaseMenu() {
+		transitionTo(1);
+	}
+
+	function makeMenu(currentPK, items, idPanel, useSelfAsNext) {	
+		if(typeof idPanel==='undefined'){
+			idPanel = 0;
+			$('#firstColumn').clone().appendTo($('#firstColumn').parent()).hide();
+		}
+		else{	$('#firstColumn').clone().appendTo($('#firstColumn').parent()).hide();	$('#firstColumn').clone().appendTo($('#firstColumn').parent()).hide();
+		}
+		for(var i=0;i<items.length;i++) {
+			itemdata = getEntryFromFile(items[i]);
+
+			var next = itemdata['next'];
+			if(typeof useSelfAsNext !== 'undefined') {
+				next = itemdata['pk'];
+			}
+			var baseItem = $("[id='base-item']:eq("+idPanel+")");
+			createMenuItem(baseItem, itemdata['title'], next, idPanel, itemdata['pk'], currentPK);
+		}
+	}
+	
+	function addLinks(regex, doLengthFiltering, isEmail, length) {
+		var data = $("#main-data").html();
+		var text = data.match(regex);
+		if (text == null){
+			return;
+		}
+		for (var i=0; i<text.length; i++){
+			if (text[i] == null){
+				continue;
+			}
+			if (isEmail == true){
+				var emaillink = "<a href=\"mailto:"+text[i]+"\">"+text[i]+"</a>";	
+				data = data.replace(text[i], emaillink);
+			}	
+			else if (doLengthFiltering == true){
+				if (text[i].length >= 7){
+					var tellink = "<a href=\"tel:"+text[i]+"\">"+text[i]+"</a>";	
+					data = data.replace(new RegExp(text[i], 'g'), tellink);
+				}
+			}
+			else {
+				var link = "<a href=\""+text[i]+"\" target=\"_blank\">"+text[i]+"</a>";	
+				data = data.replace(text[i], link);
+			}
+			for (var j=i+1; j<text.length; j++){
+				if (text[j] == text[i]){
+					text[j] = null;
+				}
+			}
+		}
+		$('#main-data').html(data);
+	}
+
+	</script>
+	
+</head>
+<body>
+	
+<div data-role="page" data-theme="b">
+	<div class='child' id="firstColumn">
+	<div data-role="header" data-theme="b">
+		<!-- <a href="" data-icon="back" id='back-button'>Back</a> -->
+		<h1 id='header-line'>Health Resources</h1> 	
+		<img id='editTitleButton' src='./lib/images/pencil.png'/>
+	</div>
+
+	<div data-role="content">
+		<div id='main-menu-wrapper'>
+			<ul data-role="listview" data-theme="c" id='main-menu'>
+				<li id='base-item' ><a href=""></a></li>
+			</ul>
+		</div>
+		<style>
+			pre {
+				white-space: pre-wrap; /* css-3 */
+				white-space: -moz-pre-wrap !important; /* Mozilla, since 1999 */
+				white-space: -pre-wrap; /* Opera 4-6 */
+				white-space: -o-pre-wrap; /* Opera 7 */
+				word-wrap: break-word; /* Internet Explorer 5.5+ */
+				
+			}		
+		</style>
+		<br/>
+		<br/>
+
+		<pre style="font-family:arial;font-size:12pt;padding-right:20%">
+			<div id='main-data'>
+			</div>
+		</pre>
+	</div>	
+	</div><!-- /content -->
+	<div data-role="footer" data-theme="b" style='position:fixed;left:0px;bottom:0px;padding-bottom:5px;padding-top:5px'>&nbsp;
+	</div> 
+</div><!-- /page -->
+
+<div id="survey"> <!-- For dialog box -->
+	<form id="add_new_item" name="add_new_item" method="post">
+   <br/><strong>Title: </strong>
+	<input id="title" type="text" name="title" value="New Title" onfocus="if (this.value == 'New Title') {this.value=''}" onblur="if(this.value == '') { this.value='New Title'}" />
+	
+   <br/><br/><strong>Add</strong><br/>
+	<!-- <input id='add_new_button' type='radio' name='radio_option' value='add_new'/>Add Blank Menu/Endpage
+	<br/> -->
+	<input id='menu' type='radio' name='radio_next_item' value='Menu' onclick='showAddNewMenuEndpage()' checked/>Add New Menu Linked Item
+	<br/>
+	<input id='menu' type='radio' name='radio_next_item' value='Endpage' onclick='showAddNewMenuEndpage()' />Add New Endpage Linked Item
+	<br/>
+	<input id='existing_menu' type='radio' name='radio_option' value='Existing Menu'  />Use Existing Menu
+	<br/>
+	<input id='existing_endpage' type='radio' name='radio_option' value='Existing Pages'  />Use Existing Endpages
+	<br/><br/>
+	<div id="existingItem">
+	</div>
+    </form>	
+</div> <!-- /End of dialog box -->
+
+<script>
+
+$(document).ready(function() {
+	$('#base-item').hide();
+	makeBaseMenu();
+	$("[id='main-data']:eq("+0+")").append("<button onclick='dialogBox("+0+")' id='popupButton'>Add New Item to this Menu</button>");
+	makeTitleStatic(0,1);
+});
+
+
+</script>
+
+</body>
+</html>

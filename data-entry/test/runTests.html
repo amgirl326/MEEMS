@@ -1,0 +1,33 @@
+<html>
+ <head>
+	<title>Test Page for logic system</title>
+		<link rel="stylesheet" href="resources/qunit.css" type="text/css" media="screen" />
+		<script src="resources/qunit.js"/> </script>
+		<script type="text/javascript" src="../lib/jquery-1.6.3.min.js"/> </script>
+		<script src="../scripts/loadjson.js"/> </script>
+ </head>
+ <body>
+  <script>
+
+  test('loadFile();', function() {
+	  loadFile('resources/test.json');
+	  ok(typeof window.jsondata, 'object', 'json data should be an array');
+	  ok(window.jsondata.length > 0, 'json data should have elements');
+	  ok(window.jsondata[1], 'first element should be truth-like'); 
+  });
+
+  test('getEntryFromFile()', function() {
+		var baseMenu = getEntryFromFile(1, 'resources/test.json');
+		equals(window.jsondata[1].type, 'MENU', '');
+		same(window.jsondata[1].pk, 1, '');
+  });
+
+  </script>
+
+<h1 id="qunit-header">Tests for logic system</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+</body>
+</html>

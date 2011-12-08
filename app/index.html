@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html manifest="cache.manifest">
+	<head>
+	
+	<title>MEEMS</title>
+	<!link rel="icon" href="lib/images/icon.png">
+	<!link rel="shortcut icon" href="lib/images/icon.png">
+	<link rel="apple-touch-icon" href="lib/images/icon.png">
+	<link rel="apple-touch-icon-precomposed" href="lib/images/icon.png">
+	<meta name="viewport" content="width=device-width, user-scalable=no">
+	<script type="text/javascript" src="phonegap.js"></script>
+	<script type="text/javascript" src="lib/jquery-1.6.3.min.js"></script>
+	<script type="text/javascript" src="lib/jquery.mobile-1.0b3.min.js"></script>
+	<script type="text/javascript" src="lib/cookieFunctions.js"></script>
+	<script type="text/javascript" src="scripts/loadjson.js"></script>
+	<script type="text/javascript" src="scripts/bookmarkFunctions.js"></script>
+	<script type="text/javascript" src="scripts/sendToUser.js"></script>
+	<script type="text/javascript" src="scripts/addLinks.js"></script>
+	<script type="text/javascript" src="lib/jquery-ui.min.js"></script>
+	<link rel="stylesheet" href="lib/ui.theme.css" type="text/css" media="all" />
+	<link rel="stylesheet" href="styles/main.css" type="text/css" media="all" />
+	<link rel="stylesheet" href="lib/jquery.mobile-1.0b3.min.css" />
+	
+	<script type="text/javascript">
+	// remember, these are the possible parameters for Set_Cookie:
+	// name, value, expires, path, domain, secure
+	function checkCookie() {
+		createCookie( 'MEEMS', 'none', '');
+		if ( readCookie( 'MEEMS' ) ) {
+			eraseCookie('MEEMS');
+		}
+		else {
+			alert('Cookies are not currently enabled. Please enable your cookies for your bookmarks to work correctly.');
+		}
+	}
+	</script>
+	<script>
+	
+	function setBack(pk) {
+		window.back.push(pk);
+		$('#back-button').show();
+		$('#back-button').unbind('click').click(function (){
+			goBack();
+		});
+	}
+
+	function goBack() {
+		var last = window.back.pop();
+
+		//if we are on the root page, hide the back button
+		if(back.length == 0) {
+			$('#back-button').hide();
+		}
+
+		if(last == 0) {
+			$('#bookmarks-button').hide();
+			showBookmarks();
+		}
+		else {
+			
+			transitionTo(last);
+			//transitionTo(last);
+		}
+	}
+	
+	function transitionTo(pk, from) {
+		$('#bookmarks-button').show();
+
+		var res = getEntryFromFile(pk);
+		window.currentPK = pk;
+		setTitle(res['title']);
+		
+		if(typeof from !== 'undefined') {
+			setBack(from);
+		}
+		
+		if(res['type'] == 'MENU') {
+			showMenu();
+			makeMenu(res['items'], res['pk']);
+		}
+		$('#add-bookmark-button').hide();
+		$('#remove-bookmark-button').hide();
+		if(res['type'] == 'ENDPAGE') {
+			hideMenu();
+			showData(res['data']);
+			showToggleButton();
+		}
+	}
+
+	function setTitle(title) {
+		$('#header-line').html(title);
+		document.title = title;
+	}
+
+	function createMenuItem(elem, text, next, from) {
+		var cloned = $(elem).clone();
+		var ul = $('#main-menu');
+		cloned.find(':only-child:last').html(text);
+		cloned.find(':only-child:last').attr('next',next);
+		cloned.attr('id', 'to_'+next);
+		cloned.click(function() {
+			transitionTo(next, from)
+		});
+
+		cloned.show();
+
+		ul.append(cloned);
+	}
+
+	function emptyMenu() {
+		$('[id^="to_"]').remove()
+	}
+
+	function emptyData() {
+		$('#main-data').empty();
+	}
+
+	function hideMenu() {
+		emptyMenu();
+		$('#main-menu-wrapper').hide();
+		$('#search_wrapper').hide();
+	}
+
+	function showMenu() {
+		emptyMenu();
+		emptyData();
+		$('#content').addClass("selected");
+		$('#main-menu-wrapper').show();
+		$('#search_wrapper').show();
+		$('#email-button').hide();
+	}
+
+	function showData(data) {
+		$('#main-data').html(data);
+		showMailerButton();
+		addAllLinks();
+	}
+
+	//assume elem with pk 1 is the base menu
+	function makeBaseMenu() {
+		var baseMenuPK = 1;
+		var res = getEntryFromFile(baseMenuPK);
+		makeMenu(res['items'], baseMenuPK);
+	}
+
+	function showBaseMenu() {
+		transitionTo(1);
+		window.back = [];
+		$('#back-button').hide();
+	}
+
+	function makeMenu(items, from, useSelfAsNext) {
+		for(var i=0;i<items.length;i++) {
+			itemdata = getEntryFromFile(items[i]);
+			var next = itemdata['next'];
+			var title=itemdata['title'];
+			if(typeof useSelfAsNext !== 'undefined') {
+				next = itemdata['pk'];
+				var position=35;
+				title=itemdata['title']+"<br>"+"<div class='menu_item'>"+itemdata['data'].substring(0,position)+"...</div>";
+				setBack(1);
+			}
+
+			createMenuItem($('#base-item'), title, next, from);
+		}
+	}
+
+	function doSearch() {
+		var searchValue=$('#search').val().toLowerCase();
+		if (searchValue.length==0){
+			return;
+		}
+		var availableTags = returnTitles();
+		var pks=[];
+		var indexes=[];
+		$.each(availableTags, function(i,v) {
+			var title=v.title;
+			var pk=v.pk;
+			var data=v.data;
+			var type=v.type;
+
+			if(type=="ENDPAGE") {
+				if(title.indexOf(searchValue) != -1 ||
+					data.toLowerCase().indexOf(searchValue) != -1) {
+
+					pks.push(pk);
+					if(data.indexOf(searchValue) != -1) {
+						indexes.push(data.indexOf(searchValue));
+					}
+					else {
+						indexes.push(10);
+					}
+				}
+			}
+		});
+		if(pks.length == 0){
+			hideMenu();
+			var data="No results were found";
+			$('#main-data').html(data);
+			setBack(1);
+		}
+		if(pks.length >= 1){
+			showMenu();
+			makeMenu(pks, 1, indexes);
+		}
+	}
+	</script>
+</head>
+<body>
+<div data-role="page" data-theme="b" >
+	<div data-role="header" data-theme="b">
+		<a href="#" data-icon="back" id='back-button' data-iconpos="notext" data-transition="slide"></a>
+			<a href="" class='toggle_bookmark_button' data-icon="star" data-iconpos="notext" id='add-bookmark-button' onclick='toggleBookmark();'></a>
+			<a href="" class='toggle_bookmark_button' data-icon="minus" data-iconpos="notext" id='remove-bookmark-button' onclick='toggleBookmark();'></a>
+		<h1 id='header-line'>MEEMS</h1>
+	</div>
+
+	<div data-role="content" style="overflow:auto" id="content">
+	
+		<div id='search_wrapper'>
+				<table width="100%">
+				<tr><td width="90%">
+				<input type="search" name="search" id="search"></input></td>
+				<td width="10%">
+				<a href="#" width="10%" data-role="button" data-icon="search" data-iconpos="notext" onclick="doSearch();">Search</a></td></tr></table>
+
+		</div>
+			
+		<div id='main-menu-wrapper'>
+		<ul data-role="listview" data-theme="c" id='main-menu'>
+			<li id='base-item' ><a href=""></a></li>
+		</ul>
+		</div>
+		
+		<pre>
+				<div id='main-data' data-scroll='true'>
+					
+				</div>
+		</pre>
+	
+	</div><!-- /content -->
+
+	<div data-role="footer" data-theme="b" id='footer'>&nbsp;
+		<div data-role="controlgroup" style="display:inline" data-type="horizontal">
+		<a href="" data-role="button" id='home-button' onclick='showBaseMenu();'>Home</a>
+		<a href="" data-role="button" id='bookmarks-button' onclick='showBookmarks();'>Bookmarks</a>
+		<a href="" data-role="button" id='email-button'>Email</a>
+		</div>
+	</div>
+ 
+</div><!-- /page -->
+
+<script>
+
+function showAlerts() {
+	now = new Date();
+
+	for(id in window.jsondata) {
+		if(window.jsondata[id].type == 'ALERT') {
+			elem = window.jsondata[id];
+			cookie = readCookie("alert_"+elem.pk);
+
+			if(cookie != "Never") {
+				start = new Date(elem.start);
+				end = new Date(elem.end);
+
+				if(start < now && now < end){ 
+					alertText = elem.title+"\n"+elem.subtitle;
+					alert(alertText);
+					createCookie("alert_"+elem.pk, "Never", 100);
+				}
+			}
+		}
+	}
+}
+
+function setup() {
+	$('#back-button').hide();
+	$('#base-item').hide();
+	$('#add-bookmark-button').hide();
+	$('#remove-bookmark-button').hide();
+	$('#email-button').hide();
+	makeBaseMenu();
+	window.back = [];
+	window.currentPK = 1;
+	showAlerts();
+	checkCookie();
+}
+
+function onDeviceReady() {
+	document.addEventListener("backbutton", onBackKeyDown, false);
+	document.addEventListener("menubutton", onMenuKeyDown, false);
+}
+
+function onBackKeyDown() {
+	if(window.back.length > 0) {
+		goBack();
+	}
+}
+
+$(document).ready(function() {
+	setup();
+	document.addEventListener("deviceready", onDeviceReady, false);
+	$('#search').keydown(function(e) {
+	if(e.keyCode == "13") {
+		doSearch();
+    }
+});
+});
+
+</script>
+
+</body>
+</html>

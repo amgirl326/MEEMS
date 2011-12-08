@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns		= "http://www.w3.org/ns/widgets"
+	xmlns:gap	= "http://phonegap.com/ns/1.0"
+	id		= "edu.cmu.is.meems"
+	version 	= "1.0.1">
+
+	<name>MEEMS</name>
+
+	<description>
+	</description>
+	<icon src="/app/lib/images/icon.png" gap:role="default" />
+
+	<preference name="permissions" value="none"/>
+
+	<!-- sample preference specification -->
+	<!-- <preference name="autorotate" value="false" readonly="true"/> -->
+</widget>
