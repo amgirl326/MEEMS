@@ -1,3 +1,5 @@
+var getJsonUrl = 'http://www.alannochenson.com/475/getJSON.php';
+
 function loadFile(filename){
 	window.jsondata=[];
 	data = [];
@@ -5,36 +7,39 @@ function loadFile(filename){
 	window.data=[];
 	
 	$.ajax({
-		url: filename,
+		type:'GET',
 		async: false,
-		dataType: 'json',
-		success: function(d) { data = d; },
+		url:filename,
+		dataType:'jsonp',
+		jsonpCallback: "fname", 
+		success:function(data){
+			for(var i=0;i<data.length;i++){
+				window.jsondata[data[i].pk]=data[i]; 
+				if(data[i].type=="ENDPAGE"){
+				window.titles[i]=data[i].title;
+				}
+			}
+			makeBaseMenu();
+		},
 		error: function (jq, text, ethrown) {
-			console.log(jq);
-			console.log(text);
-			console.log(ethrown);
-			throw 'Error: '+text;
-			return ;
+		console.log(jq);
+		console.log(text);
+		console.log(ethrown);
+		throw 'Error: '+text;
+		return ;
 		}
 	});
-
-	for(var i=0;i<data.length;i++){
-		window.jsondata[data[i].pk]=data[i]; 
-		if(data[i].type=="ENDPAGE"){
-		window.titles[i]=data[i].title;
-		}
+}
+function returnTitles() {
+	if(typeof window.titles==='undefined'){
+		loadFile(getJsonUrl);
 	}
-}
-function returnTitles(){
-if(typeof window.titles==='undefined'){
-loadFile('../data.json');
-}
-return data;
+	return data;
 }
 
 function getEntryFromFile(primarykey, filename) {
 	if(typeof filename === 'undefined') {
-		filename = '../data.json';
+		filename = getJsonUrl;
 	}
 
 	if(typeof window.jsondata === "undefined"){
@@ -51,10 +56,6 @@ function getEntry(primarykey){
 	if(!entry) {
 		throw "Can't find an entry with primary key "+primarykey;
 		return;
-	}
-
-	if(entry.type=="ENDPAGE"){
-		//do some bookmark stuff?
 	}
 
 	return window.jsondata[primarykey];

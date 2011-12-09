@@ -280,7 +280,7 @@ function setup() {
 	$('#add-bookmark-button').hide();
 	$('#remove-bookmark-button').hide();
 	$('#email-button').hide();
-	makeBaseMenu();
+	loadFile(getJsonUrl);
 	window.back = [];
 	window.currentPK = 1;
 	showAlerts();
